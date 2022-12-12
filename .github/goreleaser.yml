@@ -1,11 +1,11 @@
 # test this goreleaser config with:
-# - cd chisel
+# - cd utunnel
 # - goreleaser --skip-publish --rm-dist --config .github/goreleaser.yml
 builds:
   - env:
       - CGO_ENABLED=0
     ldflags:
-      - -s -w -X github.com/jpillora/chisel/share.BuildVersion={{.Version}}
+      - -s -w -X share.BuildVersion={{.Version}}
     flags:
       - -trimpath
     goos:

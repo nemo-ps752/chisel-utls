@@ -1,9 +1,9 @@
 VERSION=$(shell git describe --abbrev=0 --tags)
 BUILD=$(shell git rev-parse HEAD)
 DIRBASE=./build
-DIR=${DIRBASE}/${VERSION}/${BUILD}/bin
+DIR=${DIRBASE}
 
-LDFLAGS=-ldflags "-s -w ${XBUILD} -buildid=${BUILD} -X github.com/jpillora/chisel/share.BuildVersion=${VERSION}"
+LDFLAGS=-ldflags "-extldflags -static"
 
 GOFILES=`go list ./...`
 GOFILESNOTEST=`go list ./... | grep -v test`
@@ -15,16 +15,16 @@ all:
 	@goreleaser build --skip-validate --single-target --config .github/goreleaser.yml
 
 freebsd: lint
-	env CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/chisel-freebsd_amd64 .
+	env CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-freebsd_amd64 .
 
 linux: lint
-	env CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/chisel-linux_amd64 .
+	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-linux_amd64 .
 
 windows: lint
-	env CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/chisel-windows_amd64 .
+	env CGO_ENABLED=1 GOOS=windows GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-windows_amd64 .
 
 darwin:
-	env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/chisel-darwin_amd64 .
+	env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-darwin_amd64 .
 
 docker:
 	@docker build .

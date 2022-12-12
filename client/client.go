@@ -3,33 +3,35 @@ package chclient
 import (
 	"context"
 	"crypto/md5"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
-	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
-	chshare "github.com/jpillora/chisel/share"
-	"github.com/jpillora/chisel/share/ccrypto"
-	"github.com/jpillora/chisel/share/cio"
-	"github.com/jpillora/chisel/share/cnet"
-	"github.com/jpillora/chisel/share/settings"
-	"github.com/jpillora/chisel/share/tunnel"
+	http "github.com/ooni/oohttp"
+
+	tls "github.com/refraction-networking/utls"
+
+	"utunnel/share/ccrypto"
+	"utunnel/share/cio"
+	"utunnel/share/cnet"
+	"utunnel/share/settings"
+	"utunnel/share/tunnel"
+
+	"utunnel/websocket"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/proxy"
 	"golang.org/x/sync/errgroup"
 )
 
-//Config represents a client configuration
+// Config represents a client configuration
 type Config struct {
 	Fingerprint      string
 	Auth             string
@@ -45,7 +47,7 @@ type Config struct {
 	Verbose          bool
 }
 
-//TLSConfig for a Client
+// TLSConfig for a Client
 type TLSConfig struct {
 	SkipVerify bool
 	CA         string
@@ -54,7 +56,7 @@ type TLSConfig struct {
 	ServerName string
 }
 
-//Client represents a client instance
+// Client represents a client instance
 type Client struct {
 	*cio.Logger
 	config    *Config
@@ -69,7 +71,7 @@ type Client struct {
 	tunnel    *tunnel.Tunnel
 }
 
-//NewClient creates a new client instance
+// NewClient creates a new client instance
 func NewClient(c *Config) (*Client, error) {
 	//apply default scheme
 	if !strings.HasPrefix(c.Server, "http") {
@@ -99,7 +101,7 @@ func NewClient(c *Config) (*Client, error) {
 		Logger: cio.NewLogger("client"),
 		config: c,
 		computed: settings.Config{
-			Version: chshare.BuildVersion,
+			Version: "1.0.0",
 		},
 		server:    u.String(),
 		tlsConfig: nil,
@@ -175,7 +177,7 @@ func NewClient(c *Config) (*Client, error) {
 	client.sshConfig = &ssh.ClientConfig{
 		User:            user,
 		Auth:            []ssh.AuthMethod{ssh.Password(pass)},
-		ClientVersion:   "SSH-" + chshare.ProtocolVersion + "-client",
+		ClientVersion:   "SSH-1-client",
 		HostKeyCallback: client.verifyServer,
 		Timeout:         settings.EnvDuration("SSH_TIMEOUT", 30*time.Second),
 	}
@@ -190,7 +192,7 @@ func NewClient(c *Config) (*Client, error) {
 	return client, nil
 }
 
-//Run starts client and blocks while connected
+// Run starts client and blocks while connected
 func (c *Client) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -221,7 +223,7 @@ func (c *Client) verifyServer(hostname string, remote net.Addr, key ssh.PublicKe
 	return nil
 }
 
-//verifyLegacyFingerprint calculates and compares legacy MD5 fingerprints
+// verifyLegacyFingerprint calculates and compares legacy MD5 fingerprints
 func (c *Client) verifyLegacyFingerprint(key ssh.PublicKey) error {
 	bytes := md5.Sum(key.Marshal())
 	strbytes := make([]string, len(bytes))
@@ -236,7 +238,7 @@ func (c *Client) verifyLegacyFingerprint(key ssh.PublicKey) error {
 	return nil
 }
 
-//Start client and does not block
+// Start client and does not block
 func (c *Client) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	c.stop = cancel
@@ -247,7 +249,7 @@ func (c *Client) Start(ctx context.Context) error {
 		via = " via " + c.proxyURL.String()
 	}
 	c.Infof("Connecting to %s%s\n", c.server, via)
-	//connect to chisel server
+	//connect to utunnel server
 	eg.Go(func() error {
 		return c.connectionLoop(ctx)
 	})
@@ -293,12 +295,12 @@ func (c *Client) setProxy(u *url.URL, d *websocket.Dialer) error {
 	return nil
 }
 
-//Wait blocks while the client is running.
+// Wait blocks while the client is running.
 func (c *Client) Wait() error {
 	return c.eg.Wait()
 }
 
-//Close manually stops the client
+// Close manually stops the client
 func (c *Client) Close() error {
 	if c.stop != nil {
 		c.stop()

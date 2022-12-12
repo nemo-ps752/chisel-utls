@@ -8,8 +8,9 @@ import (
 	"regexp"
 	"sync"
 
+	"utunnel/share/cio"
+
 	"github.com/fsnotify/fsnotify"
-	"github.com/jpillora/chisel/share/cio"
 )
 
 type Users struct {

@@ -60,13 +60,13 @@ jobs:
         id: docker_meta
         uses: crazy-max/ghaction-docker-meta@v1
         with:
-          images: jpillora/chisel
+          images: jpillora/utunnel
           tag-latest: true
           # Outputs:
-          # jpillora/chisel:1.2.3
-          # jpillora/chisel:1.2
-          # jpillora/chisel:1
-          # jpillora/chisel:latest
+          # jpillora/utunnel:1.2.3
+          # jpillora/utunnel:1.2
+          # jpillora/utunnel:1
+          # jpillora/utunnel:latest
           tag-semver: |
             {{version}}
             {{major}}.{{minor}}

@@ -1,32 +1,27 @@
 package chserver
 
 import (
-	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	chshare "github.com/jpillora/chisel/share"
-	"github.com/jpillora/chisel/share/cnet"
-	"github.com/jpillora/chisel/share/settings"
-	"github.com/jpillora/chisel/share/tunnel"
+	http "github.com/ooni/oohttp"
+
+	"utunnel/share/cnet"
+	"utunnel/share/settings"
+	"utunnel/share/tunnel"
+
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/sync/errgroup"
 )
 
-// handleClientHandler is the main http websocket handler for the chisel server
+// handleClientHandler is the main http websocket handler for the utunnel server
 func (s *Server) handleClientHandler(w http.ResponseWriter, r *http.Request) {
-	//websockets upgrade AND has chisel prefix
+	//websockets upgrade AND has utunnel prefix
 	upgrade := strings.ToLower(r.Header.Get("Upgrade"))
-	protocol := r.Header.Get("Sec-WebSocket-Protocol")
-	if upgrade == "websocket"  {
-		if protocol == chshare.ProtocolVersion {
-			s.handleWebsocket(w, r)
-			return
-		}
-		//print into server logs and silently fall-through
-		s.Infof("ignored client connection using protocol '%s', expected '%s'",
-			protocol, chshare.ProtocolVersion)
+	if upgrade == "websocket" {
+		s.handleWebsocket(w, r)
+		return
 	}
 	//proxy target was provided
 	if s.reverseProxy != nil {
@@ -37,9 +32,6 @@ func (s *Server) handleClientHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/health":
 		w.Write([]byte("OK\n"))
-		return
-	case "/version":
-		w.Write([]byte(chshare.BuildVersion))
 		return
 	}
 	//missing :O
@@ -75,7 +67,7 @@ func (s *Server) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 		user = u
 		s.sessions.Del(sid)
 	}
-	// chisel server handshake (reverse of client handshake)
+	// utunnel server handshake (reverse of client handshake)
 	// verify configuration
 	l.Debugf("Verifying configuration")
 	// wait for request, with timeout
@@ -99,15 +91,6 @@ func (s *Server) handleWebsocket(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		failed(s.Errorf("invalid config"))
 		return
-	}
-	//print if client and server  versions dont match
-	if c.Version != chshare.BuildVersion {
-		v := c.Version
-		if v == "" {
-			v = "<unknown>"
-		}
-		l.Infof("Client version (%s) differs from server version (%s)",
-			v, chshare.BuildVersion)
 	}
 	//validate remotes
 	for _, r := range c.Remotes {

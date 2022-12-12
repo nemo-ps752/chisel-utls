@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// Env returns a chisel environment variable
+// Env returns a utunnel environment variable
 func Env(name string) string {
-	return os.Getenv("CHISEL_" + name)
+	return os.Getenv("utunnel_" + name)
 }
 
 // EnvInt returns an integer using an environment variable, with a default fallback

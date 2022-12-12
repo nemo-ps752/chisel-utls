@@ -7,11 +7,10 @@ ENV CGO_ENABLED 0
 ADD . /src
 WORKDIR /src
 RUN go build \
-    -ldflags "-X github.com/jpillora/chisel/share.BuildVersion=$(git describe --abbrev=0 --tags)" \
-    -o chisel
+    -o utunnel
 # container stage
 FROM alpine
 RUN apk update && apk add --no-cache ca-certificates
 WORKDIR /app
-COPY --from=build-env /src/chisel /app/chisel
-ENTRYPOINT ["/app/chisel"]
+COPY --from=build-env /src/utunnel /app/utunnel
+ENTRYPOINT ["/app/utunnel"]

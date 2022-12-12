@@ -3,12 +3,11 @@ package chshare
 //this file exists to maintain backwards compatibility
 
 import (
-	"github.com/jpillora/chisel/share/ccrypto"
-	"github.com/jpillora/chisel/share/cio"
-	"github.com/jpillora/chisel/share/cnet"
-	"github.com/jpillora/chisel/share/cos"
-	"github.com/jpillora/chisel/share/settings"
-	"github.com/jpillora/chisel/share/tunnel"
+	"utunnel/share/ccrypto"
+	"utunnel/share/cio"
+	"utunnel/share/cnet"
+	"utunnel/share/settings"
+	"utunnel/share/tunnel"
 )
 
 const (
@@ -45,12 +44,10 @@ var (
 	NewRWCConn       = cnet.NewRWCConn
 	NewWebSocketConn = cnet.NewWebSocketConn
 	NewHTTPServer    = cnet.NewHTTPServer
-	GoStats          = cos.GoStats
-	SleepSignal      = cos.SleepSignal
 	NewTCPProxy      = tunnel.NewProxy
 )
 
-//EncodeConfig old version
+// EncodeConfig old version
 func EncodeConfig(c *settings.Config) ([]byte, error) {
 	return settings.EncodeConfig(*c), nil
 }
