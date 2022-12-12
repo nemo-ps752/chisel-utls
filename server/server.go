@@ -4,23 +4,27 @@ import (
 	"context"
 	"errors"
 	"log"
-	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"regexp"
 	"time"
 
-	"github.com/gorilla/websocket"
-	chshare "github.com/jpillora/chisel/share"
-	"github.com/jpillora/chisel/share/ccrypto"
-	"github.com/jpillora/chisel/share/cio"
-	"github.com/jpillora/chisel/share/cnet"
-	"github.com/jpillora/chisel/share/settings"
-	"github.com/jpillora/requestlog"
+	"github.com/ooni/oohttp/httputil"
+
+	http "github.com/ooni/oohttp"
+
+	"utunnel/share/ccrypto"
+	"utunnel/share/cio"
+	"utunnel/share/cnet"
+	"utunnel/share/settings"
+
+	"utunnel/websocket"
+
+	"utunnel/requestlog"
+
 	"golang.org/x/crypto/ssh"
 )
 
-// Config is the configuration for the chisel service
+// Config is the configuration for the utunnel service
 type Config struct {
 	KeySeed   string
 	AuthFile  string
@@ -32,7 +36,7 @@ type Config struct {
 	TLS       TLSConfig
 }
 
-// Server respresent a chisel service
+// Server respresent a utunnel service
 type Server struct {
 	*cio.Logger
 	config       *Config
@@ -51,7 +55,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: settings.EnvInt("WS_BUFF_SIZE", 0),
 }
 
-// NewServer creates and returns a new chisel server
+// NewServer creates and returns a new utunnel server
 func NewServer(c *Config) (*Server, error) {
 	server := &Server{
 		config:     c,
@@ -87,7 +91,7 @@ func NewServer(c *Config) (*Server, error) {
 	server.fingerprint = ccrypto.FingerprintKey(private.PublicKey())
 	//create ssh config
 	server.sshConfig = &ssh.ServerConfig{
-		ServerVersion:    "SSH-" + chshare.ProtocolVersion + "-server",
+		ServerVersion:    "SSH-1-server",
 		PasswordCallback: server.authUser,
 	}
 	server.sshConfig.AddHostKey(private)
@@ -116,7 +120,7 @@ func NewServer(c *Config) (*Server, error) {
 	return server, nil
 }
 
-// Run is responsible for starting the chisel service.
+// Run is responsible for starting the utunnel service.
 // Internally this calls Start then Wait.
 func (s *Server) Run(host, port string) error {
 	if err := s.Start(host, port); err != nil {

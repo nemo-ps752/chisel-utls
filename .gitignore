@@ -1,7 +1,7 @@
 dist/
 *.swp
 .idea/
-chisel
+utunnel
 bin/
 release/
 tmp/
@@ -32,3 +32,6 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+*.DS_Store
+build

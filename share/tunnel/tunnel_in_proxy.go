@@ -6,18 +6,19 @@ import (
 	"net"
 	"sync"
 
-	"github.com/jpillora/chisel/share/cio"
-	"github.com/jpillora/chisel/share/settings"
+	"utunnel/share/cio"
+	"utunnel/share/settings"
+
 	"github.com/jpillora/sizestr"
 	"golang.org/x/crypto/ssh"
 )
 
-//sshTunnel exposes a subset of Tunnel to subtypes
+// sshTunnel exposes a subset of Tunnel to subtypes
 type sshTunnel interface {
 	getSSH(ctx context.Context) ssh.Conn
 }
 
-//Proxy is the inbound portion of a Tunnel
+// Proxy is the inbound portion of a Tunnel
 type Proxy struct {
 	*cio.Logger
 	sshTun sshTunnel
@@ -30,7 +31,7 @@ type Proxy struct {
 	mu     sync.Mutex
 }
 
-//NewProxy creates a Proxy
+// NewProxy creates a Proxy
 func NewProxy(logger *cio.Logger, sshTun sshTunnel, index int, remote *settings.Remote) (*Proxy, error) {
 	id := index + 1
 	p := &Proxy{
@@ -69,8 +70,8 @@ func (p *Proxy) listen() error {
 	return nil
 }
 
-//Run enables the proxy and blocks while its active,
-//close the proxy by cancelling the context.
+// Run enables the proxy and blocks while its active,
+// close the proxy by cancelling the context.
 func (p *Proxy) Run(ctx context.Context) error {
 	if p.remote.Stdio {
 		return p.runStdio(ctx)
@@ -138,7 +139,7 @@ func (p *Proxy) pipeRemote(ctx context.Context, src io.ReadWriteCloser) {
 		return
 	}
 	//ssh request for tcp connection for this proxy's remote
-	dst, reqs, err := sshConn.OpenChannel("chisel", []byte(p.remote.Remote()))
+	dst, reqs, err := sshConn.OpenChannel("utunnel", []byte(p.remote.Remote()))
 	if err != nil {
 		l.Infof("Stream error: %s", err)
 		return

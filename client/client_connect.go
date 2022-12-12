@@ -5,15 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"utunnel/share/cnet"
+	"utunnel/share/cos"
+	"utunnel/share/settings"
+
+	"utunnel/websocket"
+
 	"github.com/jpillora/backoff"
-	chshare "github.com/jpillora/chisel/share"
-	"github.com/jpillora/chisel/share/cnet"
-	"github.com/jpillora/chisel/share/cos"
-	"github.com/jpillora/chisel/share/settings"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -64,7 +66,7 @@ func (c *Client) connectionLoop(ctx context.Context) error {
 	return nil
 }
 
-//connectionOnce connects to the chisel server and blocks
+// connectionOnce connects to the utunnel server and blocks
 func (c *Client) connectionOnce(ctx context.Context) (connected bool, err error) {
 	//already closed?
 	select {
@@ -78,7 +80,7 @@ func (c *Client) connectionOnce(ctx context.Context) (connected bool, err error)
 	//prepare dialer
 	d := websocket.Dialer{
 		HandshakeTimeout: settings.EnvDuration("WS_TIMEOUT", 45*time.Second),
-		Subprotocols:     []string{chshare.ProtocolVersion},
+		Subprotocols:     []string{},
 		TLSClientConfig:  c.tlsConfig,
 		ReadBufferSize:   settings.EnvInt("WS_BUFF_SIZE", 0),
 		WriteBufferSize:  settings.EnvInt("WS_BUFF_SIZE", 0),
@@ -91,6 +93,7 @@ func (c *Client) connectionOnce(ctx context.Context) (connected bool, err error)
 	}
 	wsConn, _, err := d.DialContext(ctx, c.server, c.config.Headers)
 	if err != nil {
+		log.Fatal(err)
 		return false, err
 	}
 	conn := cnet.NewWebSocketConn(wsConn)
@@ -108,7 +111,7 @@ func (c *Client) connectionOnce(ctx context.Context) (connected bool, err error)
 		return false, err
 	}
 	defer sshConn.Close()
-	// chisel client handshake (reverse of server handshake)
+	// utunnel client handshake (reverse of server handshake)
 	// send configuration
 	c.Debugf("Sending config")
 	t0 := time.Now()

@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-//Logger is pkg/log Logger with prefixing and 2 log levels
+// Logger is pkg/log Logger with prefixing and 2 log levels
 type Logger struct {
 	Info, Debug bool
 	//internal
@@ -70,7 +70,7 @@ func (l *Logger) Prefix() string {
 }
 
 func (l *Logger) IsInfo() bool {
-	return l.Info || (l.info != nil && *l.info)
+	return true || l.Info || (l.info != nil && *l.info)
 }
 
 func (l *Logger) IsDebug() bool {
