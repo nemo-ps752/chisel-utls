@@ -10,8 +10,9 @@ import (
 	"go.uber.org/automaxprocs/maxprocs"
 )
 
-func RunTun2Socks(serverIP string, wait chan int, done chan int) {
+func RunTun2Socks(serverIP string, ready chan int, wait chan int, done chan int) {
 
+	<-ready
 	router, _ := netroute.New()
 	iface, gw, src, err := router.Route(net.IPv4(8, 8, 8, 8))
 	log.Println(iface.Name, gw.String(), src.String(), err)

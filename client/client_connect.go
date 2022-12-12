@@ -19,11 +19,11 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func (c *Client) connectionLoop(ctx context.Context) error {
+func (c *Client) connectionLoop(ready chan int, ctx context.Context) error {
 	//connection loop!
 	b := &backoff.Backoff{Max: c.config.MaxRetryInterval}
 	for {
-		connected, err := c.connectionOnce(ctx)
+		connected, err := c.connectionOnce(ready, ctx)
 		//reset backoff after successful connections
 		if connected {
 			b.Reset()
@@ -67,7 +67,7 @@ func (c *Client) connectionLoop(ctx context.Context) error {
 }
 
 // connectionOnce connects to the utunnel server and blocks
-func (c *Client) connectionOnce(ctx context.Context) (connected bool, err error) {
+func (c *Client) connectionOnce(ready chan int, ctx context.Context) (connected bool, err error) {
 	//already closed?
 	select {
 	case <-ctx.Done():
@@ -128,6 +128,7 @@ func (c *Client) connectionOnce(ctx context.Context) (connected bool, err error)
 		return false, errors.New(string(configerr))
 	}
 	c.Infof("Connected (Latency %s)", time.Since(t0))
+	ready <- 0
 	//connected, handover ssh connection for tunnel to use, and block
 	err = c.tunnel.BindSSH(ctx, sshConn, reqs, chans)
 	c.Infof("Disconnected")

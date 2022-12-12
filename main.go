@@ -217,13 +217,13 @@ func client(args []string) {
 		generatePidFile()
 	}
 	ctx := cos.InterruptContext()
-
-	if err := c.Start(ctx); err != nil {
+	ready := make(chan int)
+	if err := c.Start(ready, ctx); err != nil {
 		log.Fatal(err)
 	}
 	wait := make(chan int)
 	done := make(chan int)
-	go chtun.RunTun2Socks(addrs[0], wait, done)
+	go chtun.RunTun2Socks(addrs[0], ready, wait, done)
 	if err := c.Wait(); err != nil {
 		wait <- 0
 		<-done

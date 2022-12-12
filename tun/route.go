@@ -54,6 +54,7 @@ func resetRoute(iface string, physicalIface string, localGateway string, serverA
 	os := runtime.GOOS
 	if os == "linux" {
 		ExecCmd("/sbin/ip", "route", "delete", serverAddrIP+"/32")
+		ExecCmd("/sbin/ip", "link", "delete", iface)
 	} else if os == "darwin" {
 		ExecCmd("route", "add", "default", localGateway)
 		ExecCmd("route", "change", "default", localGateway)

@@ -196,7 +196,8 @@ func NewClient(c *Config) (*Client, error) {
 func (c *Client) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := c.Start(ctx); err != nil {
+	ready := make(chan int)
+	if err := c.Start(ready, ctx); err != nil {
 		return err
 	}
 	return c.Wait()
@@ -239,7 +240,7 @@ func (c *Client) verifyLegacyFingerprint(key ssh.PublicKey) error {
 }
 
 // Start client and does not block
-func (c *Client) Start(ctx context.Context) error {
+func (c *Client) Start(ready chan int, ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	c.stop = cancel
 	eg, ctx := errgroup.WithContext(ctx)
@@ -251,7 +252,7 @@ func (c *Client) Start(ctx context.Context) error {
 	c.Infof("Connecting to %s%s\n", c.server, via)
 	//connect to utunnel server
 	eg.Go(func() error {
-		return c.connectionLoop(ctx)
+		return c.connectionLoop(ready, ctx)
 	})
 	//listen sockets
 	eg.Go(func() error {
