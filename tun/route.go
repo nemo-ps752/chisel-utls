@@ -7,11 +7,12 @@ import (
 	"strconv"
 )
 
+var CIDR = "172.18.0.1/32"
+var ServerIP = "172.18.0.1"
+var MTU = 1500
+
 // setRoute sets the system routes
 func setRoute(iface string, physicalIface string, localGateway string, serverAddrIP string) {
-	CIDR := "172.18.0.1/32"
-	ServerIP := "172.18.0.1"
-	MTU := 1500
 
 	ip, _, err := net.ParseCIDR(CIDR)
 	if err != nil {
@@ -38,9 +39,12 @@ func setRoute(iface string, physicalIface string, localGateway string, serverAdd
 
 	} else if os == "windows" {
 
+		ExecCmd("cmd", "/C", "netsh", "interface", "ip", "set", "address", "\"wintun\"", "static", "address="+ServerIP, "mask=255.255.255.255", "gateway="+ServerIP)
+		ExecCmd("cmd", "/C", "netsh", "interface", "ip", "add", "dns", "\"wintun\"", "1.1.1.1")
+		ExecCmd("cmd", "/C", "netsh", "interface", "ip", "add", "dns", "\"wintun\"", "1.0.0.1", "index=2")
+
 		ExecCmd("cmd", "/C", "route", "add", serverAddrIP+"/32", localGateway, "metric", "5")
-		ExecCmd("cmd", "/C", "route", "delete", "0.0.0.0", "mask", "0.0.0.0")
-		ExecCmd("cmd", "/C", "route", "add", "0.0.0.0", "mask", "0.0.0.0", ServerIP, "metric", "6")
+		ExecCmd("cmd", "/C", "route", "add", "0.0.0.0", "mask", "0.0.0.0", ServerIP, "metric", "5")
 
 	} else {
 		log.Printf("not support os %v", os)
@@ -61,7 +65,7 @@ func resetRoute(iface string, physicalIface string, localGateway string, serverA
 		ExecCmd("route", "delete", serverAddrIP)
 	} else if os == "windows" {
 		ExecCmd("cmd", "/C", "route", "delete", serverAddrIP+"/32")
-		ExecCmd("cmd", "/C", "route", "delete", "0.0.0.0", "mask", "0.0.0.0")
-		ExecCmd("cmd", "/C", "route", "add", "0.0.0.0", "mask", "0.0.0.0", localGateway, "metric", "6")
+		ExecCmd("cmd", "/C", "route", "delete", "0.0.0.0", "mask", "0.0.0.0", ServerIP)
+		//ExecCmd("cmd", "/C", "route", "add", "0.0.0.0", "mask", "0.0.0.0", localGateway, "metric", "6")
 	}
 }

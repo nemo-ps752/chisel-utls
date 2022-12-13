@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net"
 	"net/url"
 	"os"
@@ -195,7 +197,7 @@ func client(args []string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	addrs, err := net.LookupHost(parsedUrl.Hostname())
+	addrs, err := net.DefaultResolver.LookupIP(context.Background(), "ip4", parsedUrl.Hostname())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -205,7 +207,9 @@ func client(args []string) {
 	if *sni != "" {
 		config.TLS.ServerName = *sni
 	}
-	log.Printf("Connection Address: %v", addrs[0])
+	ipAddress := addrs[rand.Intn(len(addrs))].String()
+	log.Printf("Connection Address: %v", ipAddress)
+	config.Server = "https://" + ipAddress + "/data"
 
 	//ready
 	c, err := chclient.NewClient(&config)
@@ -223,7 +227,7 @@ func client(args []string) {
 	}
 	wait := make(chan int)
 	done := make(chan int)
-	go chtun.RunTun2Socks(addrs[0], ready, wait, done)
+	go chtun.RunTun2Socks(ipAddress, ready, wait, done)
 	if err := c.Wait(); err != nil {
 		wait <- 0
 		<-done
