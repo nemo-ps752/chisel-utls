@@ -15,19 +15,19 @@ all:
 	@goreleaser build --skip-validate --single-target --config .github/goreleaser.yml
 
 freebsd: lint
-	env CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-freebsd_amd64 .
+	env CGO_ENABLED=0 GOOS=freebsd GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-freebsd_amd64 cmd/cli.go
 
 linux: lint
-	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-linux_amd64 .
+	env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-linux_amd64 cmd/cli.go
 
 windows: lint
-	env CGO_ENABLED=1 GOOS=windows GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-windows_amd64 .
+	env CGO_ENABLED=1 GOOS=windows GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-windows_amd64 cmd/cli.go
 
 darwin:
-	env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-darwin_amd64 .
+	env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-darwin_amd64 cmd/cli.go
 
 openwrt:
-	env CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-openwrt .
+	env CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat garble -literals -tiny -seed=random build -trimpath ${LDFLAGS} ${GCFLAGS} ${ASMFLAGS} -o ${DIR}/utunnel-openwrt cmd/cli.go
 
 docker:
 	@docker build .

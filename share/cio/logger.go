@@ -2,6 +2,7 @@ package cio
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 )
@@ -75,4 +76,8 @@ func (l *Logger) IsInfo() bool {
 
 func (l *Logger) IsDebug() bool {
 	return l.Debug || (l.debug != nil && *l.debug)
+}
+
+func (l *Logger) SetOutput(w io.Writer) {
+	l.logger.SetOutput(w)
 }

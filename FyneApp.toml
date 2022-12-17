@@ -1,0 +1,6 @@
+[Details]
+  Icon = "./assets/logo.png"
+  Name = "uTunnel"
+  ID = "com.utunnel.tunnel"
+  Version = "1.0.0"
+  Build = 3

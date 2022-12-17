@@ -6,7 +6,7 @@ RUN apk add git
 ENV CGO_ENABLED 0
 ADD . /src
 WORKDIR /src
-RUN go build \
+RUN go build cmd/cli.go \
     -o utunnel
 # container stage
 FROM alpine

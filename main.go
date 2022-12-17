@@ -2,237 +2,262 @@ package main
 
 import (
 	"context"
-	"flag"
-	"fmt"
-	"io/ioutil"
+	"encoding/base64"
+	"image/color"
+	"io"
 	"log"
 	"math/rand"
 	"net"
 	"net/url"
 	"os"
-	"strconv"
+	"runtime"
 	"strings"
 	"time"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	http "github.com/ooni/oohttp"
 
 	chclient "utunnel/client"
-	chserver "utunnel/server"
+	chshare "utunnel/share"
 	"utunnel/share/cos"
 	chtun "utunnel/tun"
 
-	socks5 "github.com/txthinking/socks5"
-
-	_ "github.com/xjasonlyu/tun2socks/v2/dns"
+	"github.com/getlantern/elevate"
+	viper "github.com/spf13/viper"
 )
 
-func main() {
+var APP_NAME = "uTunnel"
 
-	flag.Bool("help", false, "")
-	flag.Bool("h", false, "")
-	flag.Usage = func() {}
-	flag.Parse()
-
-	args := flag.Args()
-
-	subcmd := ""
-	if len(args) > 0 {
-		subcmd = args[0]
-		args = args[1:]
-	}
-
-	switch subcmd {
-	case "server":
-		server(args)
-	case "client":
-		client(args)
-	default:
-		os.Exit(0)
-	}
+type LogWriter struct {
+	io.Writer
 }
 
-func generatePidFile() {
-	pid := []byte(strconv.Itoa(os.Getpid()))
-	if err := ioutil.WriteFile("utunnel.pid", pid, 0644); err != nil {
-		log.Fatal(err)
-	}
+var chnLogger = make(chan string)
+var chnStatus = make(chan chclient.ConnectionStatusEnum)
+
+func (l LogWriter) Write(p []byte) (int, error) {
+	chnLogger <- string(p)
+	return len(p), nil
 }
 
-func server(args []string) {
-
-	flags := flag.NewFlagSet("server", flag.ContinueOnError)
-
-	config := &chserver.Config{}
-	flags.StringVar(&config.KeySeed, "key", "", "")
-	flags.StringVar(&config.AuthFile, "authfile", "", "")
-	flags.StringVar(&config.Auth, "auth", "", "")
-	flags.DurationVar(&config.KeepAlive, "keepalive", 25*time.Second, "")
-	flags.StringVar(&config.Proxy, "proxy", "", "")
-	flags.StringVar(&config.Proxy, "backend", "", "")
-	flags.BoolVar(&config.Socks5, "socks5", false, "")
-	flags.BoolVar(&config.Reverse, "reverse", false, "")
-	flags.StringVar(&config.TLS.Key, "tls-key", "", "")
-	flags.StringVar(&config.TLS.Cert, "tls-cert", "", "")
-	flags.StringVar(&config.TLS.CA, "tls-ca", "", "")
-
-	host := flags.String("host", "", "")
-	p := flags.String("p", "", "")
-	port := flags.String("port", "", "")
-	pid := flags.Bool("pid", false, "")
-	verbose := flags.Bool("v", false, "")
-
-	flags.Parse(args)
-
-	if *host == "" {
-		*host = os.Getenv("HOST")
-	}
-	if *host == "" {
-		*host = "0.0.0.0"
-	}
-	if *port == "" {
-		*port = *p
-	}
-	if *port == "" {
-		*port = os.Getenv("PORT")
-	}
-	if *port == "" {
-		*port = "8080"
-	}
-	if config.KeySeed == "" {
-		config.KeySeed = os.Getenv("utunnel_KEY")
-	}
-	s, err := chserver.NewServer(config)
+func TouchFile(name string) error {
+	file, err := os.OpenFile(name, os.O_RDONLY|os.O_CREATE, 0644)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	s.Debug = *verbose
-	if *pid {
-		generatePidFile()
-	}
-	ctx := cos.InterruptContext()
-	if err := s.StartContext(ctx, *host, *port); err != nil {
-		log.Fatal(err)
-	}
-	done := make(chan int)
-	wait := make(chan int)
-	go socksServer(done, wait)
-
-	if err := s.Wait(); err != nil {
-		log.Fatal(err)
-	}
-	done <- 0
-	<-wait
+	return file.Close()
 }
 
-func socksServer(done chan int, wait chan int) {
+var client *chclient.Client
 
-	s5, err := socks5.NewClassicServer("127.0.0.1:9050", "127.0.0.1", "", "", 30, 30)
-	if err != nil {
-		log.Fatal(err)
-	}
-	go s5.ListenAndServe(s5.Handle)
-	<-done
-	s5.Shutdown()
-	log.Println("Closed Socks Server!")
-	wait <- 0
-
-}
-
-type headerFlags struct {
-	http.Header
-}
-
-func (flag *headerFlags) String() string {
-	out := ""
-	for k, v := range flag.Header {
-		out += fmt.Sprintf("%s: %s\n", k, v)
-	}
-	return out
-}
-
-func (flag *headerFlags) Set(arg string) error {
-	index := strings.Index(arg, ":")
-	if index < 0 {
-		return fmt.Errorf(`invalid header (%s). should be in the format "HeaderName: HeaderContent"`, arg)
-	}
-	if flag.Header == nil {
-		flag.Header = http.Header{}
-	}
-	key := arg[0:index]
-	value := arg[index+1:]
-	flag.Header.Set(key, strings.TrimSpace(value))
-	return nil
-}
-
-func client(args []string) {
-	flags := flag.NewFlagSet("client", flag.ContinueOnError)
+func Connect(server string, username string, password string) {
 	config := chclient.Config{Headers: http.Header{}}
-	flags.StringVar(&config.Fingerprint, "fingerprint", "", "")
-	flags.StringVar(&config.Auth, "auth", "", "")
-	flags.DurationVar(&config.KeepAlive, "keepalive", 25*time.Second, "")
-	flags.IntVar(&config.MaxRetryCount, "max-retry-count", -1, "")
-	flags.DurationVar(&config.MaxRetryInterval, "max-retry-interval", 0, "")
-	flags.StringVar(&config.Proxy, "proxy", "", "")
-	flags.StringVar(&config.TLS.CA, "tls-ca", "", "")
-	flags.BoolVar(&config.TLS.SkipVerify, "tls-skip-verify", false, "")
-	flags.StringVar(&config.TLS.Cert, "tls-cert", "", "")
-	flags.StringVar(&config.TLS.Key, "tls-key", "", "")
-	flags.Var(&headerFlags{config.Headers}, "header", "")
-	sni := flags.String("sni", "", "")
-	pid := flags.Bool("pid", false, "")
-	verbose := flags.Bool("v", false, "")
-	flags.Parse(args)
-	//pull out options, put back remaining args
-	config.Server = flags.Args()[0]
+	config.Fingerprint = ""
+	config.Auth = username + ":" + password
+	config.KeepAlive = 25 * time.Second
+	config.MaxRetryCount = -1
+	config.MaxRetryInterval = 0
+	config.Proxy = ""
+	config.TLS.CA = ""
+	config.TLS.SkipVerify = false
+	config.TLS.Cert = ""
+	config.TLS.Key = ""
 
-	config.Remotes = flags.Args()[1:]
+	//pull out options, put back remaining args
+	config.Server = server
+
+	config.Remotes = make([]string, 0)
 	config.Remotes = append(config.Remotes, "9050:127.0.0.1:9050")
 	config.Remotes = append(config.Remotes, "9050:127.0.0.1:9050/udp")
-	//default auth
-	if config.Auth == "" {
-		config.Auth = os.Getenv("AUTH")
-	}
-	//move hostname onto headers
+
 	parsedUrl, err := url.Parse(config.Server)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	addrs, err := net.DefaultResolver.LookupIP(context.Background(), "ip4", parsedUrl.Hostname())
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	config.Headers.Set("Host", parsedUrl.Hostname())
 	config.TLS.ServerName = parsedUrl.Hostname()
 
-	if *sni != "" {
-		config.TLS.ServerName = *sni
-	}
 	ipAddress := addrs[rand.Intn(len(addrs))].String()
 	log.Printf("Connection Address: %v", ipAddress)
 	config.Server = "https://" + ipAddress + "/data"
 
-	//ready
-	c, err := chclient.NewClient(&config)
+	client, err = chclient.NewClient(&config)
+	client.Logger.SetOutput(LogWriter{})
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
-	c.Debug = *verbose
-	if *pid {
-		generatePidFile()
-	}
+	client.Debug = false
 	ctx := cos.InterruptContext()
-	ready := make(chan int)
-	if err := c.Start(ready, ctx); err != nil {
-		log.Fatal(err)
+	if err := client.Start(ctx); err != nil {
+		log.Println(err)
 	}
 	wait := make(chan int)
 	done := make(chan int)
-	go chtun.RunTun2Socks(ipAddress, ready, wait, done)
-	if err := c.Wait(); err != nil {
-		wait <- 0
-		<-done
-		log.Fatal(err)
+	isFirstTime := true
+	client.ConnectionStatus.OnStatusChange = func(status chclient.ConnectionStatusEnum) {
+		chnStatus <- status
+		if status == chclient.Connected && isFirstTime {
+			go chtun.RunTun2Socks(ipAddress, wait, done)
+			isFirstTime = false
+		}
+	}
+	err = client.Wait()
+	if err != nil {
+		log.Println(err)
 	}
 	wait <- 0
 	<-done
+}
+
+func Disconnect() {
+	if client != nil {
+		client.Close()
+	}
+}
+
+func IsAdmin() bool {
+	goos := runtime.GOOS
+	if goos == "windows" {
+		_, err := os.Open("\\\\.\\PHYSICALDRIVE0")
+		return err == nil
+	} else {
+		return os.Geteuid() == 0
+	}
+}
+
+func main() {
+	if !IsAdmin() {
+		goos := runtime.GOOS
+		if goos == "darwin" || goos == "windows" {
+			cmd := elevate.Command(os.Args[0])
+			cmd.Run()
+		} else {
+			dApp := app.New()
+			window := dApp.NewWindow(APP_NAME)
+			window.SetContent(
+				container.NewBorder(
+					widget.NewLabel("This app must run as administrator!"),
+					widget.NewButton("OK", func() { os.Exit(0) }),
+					nil, nil,
+				),
+			)
+			window.ShowAndRun()
+		}
+		return
+	}
+	viper.SetConfigType("yaml")
+	viper.SetConfigFile("./config.yml")
+	viper.SetDefault("address", "")
+	viper.SetDefault("username", "")
+	viper.SetDefault("password", "")
+	err := TouchFile("./config.yml")
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+	err = viper.ReadInConfig()
+	if err != nil {
+		log.Fatal(err)
+		os.Exit(1)
+	}
+
+	print(os.Geteuid())
+	log.SetOutput(LogWriter{})
+	appClient := app.New()
+	appClient.SetIcon(chshare.LogoPNG)
+	appClient.Settings().SetTheme(theme.DarkTheme())
+	winWindow := appClient.NewWindow(APP_NAME)
+
+	txtLogs := widget.NewMultiLineEntry()
+	txtLogs.Wrapping = fyne.TextWrapBreak
+	txtLogs.Disable()
+
+	txtAddress := widget.NewEntry()
+	txtAddress.Text = viper.GetString("address")
+	txtAddress.OnChanged = func(s string) {
+		viper.Set("address", s)
+	}
+
+	txtUsername := widget.NewEntry()
+	txtUsername.Text = viper.GetString("username")
+	txtUsername.OnChanged = func(s string) {
+		viper.Set("username", s)
+	}
+
+	txtPassword := widget.NewPasswordEntry()
+	password, _ := base64.StdEncoding.DecodeString(viper.GetString("password"))
+	txtPassword.SetText(string(password))
+	txtPassword.Password = true
+	txtPassword.OnChanged = func(s string) {
+		viper.Set("password", base64.StdEncoding.EncodeToString([]byte(s)))
+	}
+
+	form := widget.NewForm(
+		widget.NewFormItem("Address", txtAddress),
+		widget.NewFormItem("Username", txtUsername),
+		widget.NewFormItem("Password", txtPassword),
+	)
+
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Config", form),
+		container.NewTabItem("Logs", txtLogs),
+	)
+	btnConnect := widget.NewButton("Connect", func() {})
+	btnConnect.OnTapped = func() {
+		viper.WriteConfig()
+		if client != nil && client.ConnectionStatus.Status != chclient.Disconnected {
+			go Disconnect()
+		} else {
+			go Connect(txtAddress.Text, txtUsername.Text, txtPassword.Text)
+		}
+	}
+	btnBackground := canvas.NewRectangle(color.RGBA{R: 255})
+	btnContainer := container.NewMax(btnConnect, btnBackground)
+
+	go func() {
+		for status := range chnStatus {
+			println("Connection Status: ", status)
+			if status == chclient.Connected {
+				btnBackground.FillColor = color.RGBA{G: 255}
+				btnBackground.Refresh()
+				btnConnect.SetText("Disconnect")
+			} else if status == chclient.Connecting {
+				btnBackground.FillColor = color.RGBA{G: 255, R: 255}
+				btnBackground.Refresh()
+				btnConnect.SetText("Connecting...")
+			} else {
+				btnBackground.FillColor = color.RGBA{R: 255}
+				btnBackground.Refresh()
+				btnConnect.SetText("Connect")
+			}
+		}
+	}()
+
+	vbox := container.NewBorder(nil, btnContainer, nil, nil,
+		tabs,
+	)
+
+	winWindow.Resize(fyne.NewSize(800, 450))
+	winWindow.SetFixedSize(true)
+	winWindow.SetContent(vbox)
+
+	go func() {
+		for text := range chnLogger {
+			txtLogs.SetText(txtLogs.Text + text)
+			txtLogs.CursorRow = strings.Count(txtLogs.Text, "\n")
+		}
+	}()
+
+	winWindow.ShowAndRun()
+
 }

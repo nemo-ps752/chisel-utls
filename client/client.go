@@ -31,6 +31,26 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type ConnectionStatusEnum int64
+
+const (
+	Disconnected ConnectionStatusEnum = iota
+	Connecting
+	Connected
+)
+
+type ConnectionStatus struct {
+	Status         ConnectionStatusEnum
+	OnStatusChange func(status ConnectionStatusEnum)
+}
+
+func (s *ConnectionStatus) ChangeStatus(status ConnectionStatusEnum) {
+	s.Status = status
+	if s.OnStatusChange != nil {
+		s.OnStatusChange(status)
+	}
+}
+
 // Config represents a client configuration
 type Config struct {
 	Fingerprint      string
@@ -59,16 +79,17 @@ type TLSConfig struct {
 // Client represents a client instance
 type Client struct {
 	*cio.Logger
-	config    *Config
-	computed  settings.Config
-	sshConfig *ssh.ClientConfig
-	tlsConfig *tls.Config
-	proxyURL  *url.URL
-	server    string
-	connCount cnet.ConnCount
-	stop      func()
-	eg        *errgroup.Group
-	tunnel    *tunnel.Tunnel
+	config           *Config
+	computed         settings.Config
+	sshConfig        *ssh.ClientConfig
+	tlsConfig        *tls.Config
+	proxyURL         *url.URL
+	server           string
+	connCount        cnet.ConnCount
+	stop             func()
+	eg               *errgroup.Group
+	tunnel           *tunnel.Tunnel
+	ConnectionStatus *ConnectionStatus
 }
 
 // NewClient creates a new client instance
@@ -189,6 +210,7 @@ func NewClient(c *Config) (*Client, error) {
 		Socks:     hasReverse && hasSocks,
 		KeepAlive: client.config.KeepAlive,
 	})
+	client.ConnectionStatus = &ConnectionStatus{Status: Disconnected}
 	return client, nil
 }
 
@@ -196,8 +218,7 @@ func NewClient(c *Config) (*Client, error) {
 func (c *Client) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ready := make(chan int)
-	if err := c.Start(ready, ctx); err != nil {
+	if err := c.Start(ctx); err != nil {
 		return err
 	}
 	return c.Wait()
@@ -240,7 +261,7 @@ func (c *Client) verifyLegacyFingerprint(key ssh.PublicKey) error {
 }
 
 // Start client and does not block
-func (c *Client) Start(ready chan int, ctx context.Context) error {
+func (c *Client) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	c.stop = cancel
 	eg, ctx := errgroup.WithContext(ctx)
@@ -252,7 +273,7 @@ func (c *Client) Start(ready chan int, ctx context.Context) error {
 	c.Infof("Connecting to %s%s\n", c.server, via)
 	//connect to utunnel server
 	eg.Go(func() error {
-		return c.connectionLoop(ready, ctx)
+		return c.connectionLoop(ctx)
 	})
 	//listen sockets
 	eg.Go(func() error {

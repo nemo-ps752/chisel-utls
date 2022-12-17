@@ -19,15 +19,17 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-func (c *Client) connectionLoop(ready chan int, ctx context.Context) error {
+func (c *Client) connectionLoop(ctx context.Context) error {
 	//connection loop!
 	b := &backoff.Backoff{Max: c.config.MaxRetryInterval}
 	for {
-		connected, err := c.connectionOnce(ready, ctx)
+		c.ConnectionStatus.ChangeStatus(Connecting)
+		connected, err := c.connectionOnce(ctx)
 		//reset backoff after successful connections
 		if connected {
 			b.Reset()
 		}
+		c.ConnectionStatus.ChangeStatus(Disconnected)
 		//connection error
 		attempt := int(b.Attempt())
 		maxAttempt := c.config.MaxRetryCount
@@ -67,7 +69,7 @@ func (c *Client) connectionLoop(ready chan int, ctx context.Context) error {
 }
 
 // connectionOnce connects to the utunnel server and blocks
-func (c *Client) connectionOnce(ready chan int, ctx context.Context) (connected bool, err error) {
+func (c *Client) connectionOnce(ctx context.Context) (connected bool, err error) {
 	//already closed?
 	select {
 	case <-ctx.Done():
@@ -93,7 +95,7 @@ func (c *Client) connectionOnce(ready chan int, ctx context.Context) (connected 
 	}
 	wsConn, _, err := d.DialContext(ctx, c.server, c.config.Headers)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		return false, err
 	}
 	conn := cnet.NewWebSocketConn(wsConn)
@@ -128,7 +130,7 @@ func (c *Client) connectionOnce(ready chan int, ctx context.Context) (connected 
 		return false, errors.New(string(configerr))
 	}
 	c.Infof("Connected (Latency %s)", time.Since(t0))
-	ready <- 0
+	c.ConnectionStatus.ChangeStatus(Connected)
 	//connected, handover ssh connection for tunnel to use, and block
 	err = c.tunnel.BindSSH(ctx, sshConn, reqs, chans)
 	c.Infof("Disconnected")
